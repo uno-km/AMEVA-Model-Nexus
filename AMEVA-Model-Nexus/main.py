@@ -51,6 +51,8 @@ else:
     LLM_CTX_SIZE = 2048            # 넉넉한 컨텍스트
 
 # (팁) 만약 모델 폴더를 통일하고 싶다면 현재 폴더 기준 상대경로("./models/qwen.gguf")를 쓰시면 더 완벽합니다.
+PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
+MODEL_DIR = os.path.join(PROJECT_ROOT, "models")
 
 llm = None
 executor = ThreadPoolExecutor(max_workers=MAX_CONCURRENT_CHUNKS)
@@ -179,6 +181,21 @@ def get_stats():
         "cpu_percent": sys_monitor.cpu,
         "ram_percent": sys_monitor.ram
     }
+
+def _is_model_file(filename: str) -> bool:
+    allowed_exts = {".gguf", ".bin", ".pth", ".pt", ".ckpt", ".safetensors", ".h5", ".pb", ".onnx", ".tflite"}
+    return os.path.splitext(filename)[1].lower() in allowed_exts
+
+@app.get("/list")
+def list_models():
+    """models 폴더 내 모델 파일 목록을 반환합니다."""
+    try:
+        files = sorted(os.listdir(MODEL_DIR))
+    except FileNotFoundError:
+        return {"model_directory": MODEL_DIR, "models": []}
+
+    model_files = [f for f in files if os.path.isfile(os.path.join(MODEL_DIR, f)) and _is_model_file(f)]
+    return {"model_directory": MODEL_DIR, "models": model_files}
 
 class ChunkRequest(BaseModel):
     chunk_id: int

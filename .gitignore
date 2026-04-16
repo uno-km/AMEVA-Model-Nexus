@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+.venv*
+
+# Project-specific ignores
+AMEVA-Model-Nexus/.venv/
+AMEVA-Model-Nexus/models/
+
+# Binary artifacts and extracted tools
+scrcpy-win64-v3.3.4/
+*.dll
+*.exe
+*.bat
+*.lib
+*.pdb
+*.zip
+*.7z
+*.tar.gz
+
+# Logs and runtime
+*.log
+*.gz
+*.tmp
+*.cache
+
+# IDE/editor
+.vscode/
+.idea/
+.DS_Store
