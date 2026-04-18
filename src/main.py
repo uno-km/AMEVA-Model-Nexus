@@ -1,5 +1,6 @@
 import os
 import time
+from pc_launcher import AmevaPCNodeLauncher
 import json
 import gzip
 import shutil
@@ -27,28 +28,6 @@ def detect_environment():
     return "PC"
 
 ENV_TYPE = detect_environment()
-
-# ==========================================
-# ⚙️ 동적 설정 (Dynamic Configuration)
-# ==========================================
-if ENV_TYPE == "MOBILE":
-    print("📱 [SYSTEM] Mobile Edge Device Detected. Applying Survival Mode...")
-    # 모바일(A53, A35, S20) 생존 설정
-    MODEL_PATH = "/data/data/com.termux/files/home/AI_Models/qwen.gguf"
-    MAX_CONCURRENT_CHUNKS = 1      # 스레드 폭주 방지 (턴제)
-    INFERENCE_TIMEOUT = 180.0      # 모바일 연산 속도 고려
-    RAM_LIMIT_PERCENT = 85.0       # 보수적인 RAM 컷오프
-    LLM_GPU_LAYERS = 0             # 100% CPU 연산
-    LLM_CTX_SIZE = 1024            # 컨텍스트 다이어트
-else:
-    print("💻 [SYSTEM] High-Performance PC Detected. Applying Beast Mode...")
-    # 메인 PC(Windows/Ubuntu) 고성능 설정
-    MODEL_PATH = "C:/AI_Models/qwen.gguf" # 리눅스면 /home/user/AI_Models/qwen.gguf 등으로 수정
-    MAX_CONCURRENT_CHUNKS = 8      # 8차선 병렬 풀악셀
-    INFERENCE_TIMEOUT = 30.0       # 빠른 타임아웃
-    RAM_LIMIT_PERCENT = 93.0       # PC의 넉넉한 RAM 활용
-    LLM_GPU_LAYERS = -1            # NVIDIA GPU 풀 가동
-    LLM_CTX_SIZE = 2048            # 넉넉한 컨텍스트
 
 # (팁) 만약 모델 폴더를 통일하고 싶다면 현재 폴더 기준 상대경로("./models/qwen.gguf")를 쓰시면 더 완벽합니다.
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))

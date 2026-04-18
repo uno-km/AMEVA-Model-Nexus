@@ -1,0 +1,31 @@
+{
+  "nodes": {
+    "ROUTER": {
+      "device": "A35",
+      "model_filename": "qwen-1.5b.gguf",
+      "model_dir": "/data/data/com.termux/files/home/AI_Models",
+      "port": 14001,
+      "ctx_size": 1024,
+      "threads": 4,
+      "ram_limit": 85.0
+    },
+    "EXPERT_MOBILE": {
+      "device": "S20",
+      "model_filename": "qwen-3b.gguf",
+      "model_dir": "/data/data/com.termux/files/home/AI_Models",
+      "port": 14002,
+      "ctx_size": 1024,
+      "threads": 4,
+      "ram_limit": 85.0
+    },
+    "EXPERT_PC": {
+      "device": "PC",
+      "model_filename": "qwen-3b.gguf",
+      "model_dir": "C:/AI_Models",
+      "port": 14000,
+      "ctx_size": 4096,
+      "threads": 8,
+      "ram_limit": 93.0
+    }
+  }
+}
