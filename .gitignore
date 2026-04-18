@@ -1,18 +1,52 @@
-# Python
+# ===============================
+# Python bytecode / cache
+# ===============================
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 
+# ===============================
 # Virtual environments
+# ===============================
 .venv/
 .venv*
 
-# Project-specific ignores
+# ===============================
+# Model files and large artifacts
+# ===============================
+models/
+*.gguf
+*.bin
+*.pth
+*.pt
+*.ckpt
+
+# ===============================
+# Logs and runtime artifacts
+# ===============================
+*.log
+*.gz
+*.tmp
+*.cache
+
+# ===============================
+# IDE / Editor
+# ===============================
+.vscode/
+.idea/
+.DS_Store
+
+# ===============================
+# Project-specific legacy paths
+# (중첩 구조 정리 전 잔재 대비용)
+# ===============================
 AMEVA-Model-Nexus/.venv/
 AMEVA-Model-Nexus/models/
 
-# Binary artifacts and extracted tools
+# ===============================
+# Binary artifacts & extracted tools
+# ===============================
 scrcpy-win64-v3.3.4/
 *.dll
 *.exe
@@ -22,14 +56,3 @@ scrcpy-win64-v3.3.4/
 *.zip
 *.7z
 *.tar.gz
-
-# Logs and runtime
-*.log
-*.gz
-*.tmp
-*.cache
-
-# IDE/editor
-.vscode/
-.idea/
-.DS_Store
