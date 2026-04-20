@@ -1,0 +1,2 @@
+{"time": "2026-04-20 14:17:45", "event": "SYSTEM", "msg": "Hub starting", "env": "PC", "node": "EXPERT_PC", "hub_port": 13000, "llm_port": 14000, "concurrency": 8}
+{"time": "2026-04-20 14:18:11", "event": "SYSTEM", "msg": "Docker llama.cpp server ready", "base_url": "http://127.0.0.1:14000"}

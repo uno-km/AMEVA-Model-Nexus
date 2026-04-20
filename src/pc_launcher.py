@@ -85,10 +85,10 @@ class AmevaPCNodeLauncher:
         has_gpu = self.check_gpu()
 
         if has_gpu:
-            image = "ghcr.io/ggerganov/llama.cpp:server-cuda"
+            image = "ghcr.io/ggml-org/llama.cpp:server-cuda"
             gpu_flags = ["--gpus", "all"]
         else:
-            image = "ghcr.io/ggerganov/llama.cpp:server"
+            image = "ghcr.io/ggml-org/llama.cpp:server"
             gpu_flags = []
 
         self._remove_existing_container()

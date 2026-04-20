@@ -20,8 +20,8 @@
     },
     "EXPERT_PC": {
       "device": "PC",
-      "model_filename": "qwen-3b.gguf",
-      "model_dir": "C:/AI_Models",
+      "model_filename": "qwen2.5-3b-instruct-q4_k_m.gguf",
+      "model_dir": "C:/ameva/AI_Models",
       "port": 14000,
       "ctx_size": 4096,
       "threads": 8,
