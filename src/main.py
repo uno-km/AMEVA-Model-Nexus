@@ -74,7 +74,7 @@ LLM_PORT = int(NODE_CFG.get("port", 14000))
 LLM_BASE_URL = f"http://127.0.0.1:{LLM_PORT}"
 
 MODEL_DIR = NODE_CFG.get("model_dir", os.path.join(PROJECT_ROOT, "models"))
-MODEL_FILENAME = NODE_CFG.get("model_filename", "qwen-3b.gguf")
+MODEL_FILENAME = NODE_CFG.get("model_filename", "qwen2.5-3b-instruct-q4_k_m.gguf")
 MODEL_PATH = os.path.join(MODEL_DIR, MODEL_FILENAME)
 
 LLM_CTX_SIZE = int(NODE_CFG.get("ctx_size", 2048))

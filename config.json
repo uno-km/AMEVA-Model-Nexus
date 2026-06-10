@@ -2,7 +2,7 @@
   "nodes": {
     "ROUTER": {
       "device": "A35",
-      "model_filename": "qwen-1.5b.gguf",
+      "model_filename": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
       "model_dir": "/data/data/com.termux/files/home/AI_Models",
       "port": 14001,
       "ctx_size": 1024,
@@ -11,7 +11,7 @@
     },
     "EXPERT_MOBILE": {
       "device": "S20",
-      "model_filename": "qwen-3b.gguf",
+      "model_filename": "qwen2.5-3b-instruct-q4_k_m.gguf",
       "model_dir": "/data/data/com.termux/files/home/AI_Models",
       "port": 14002,
       "ctx_size": 1024,
