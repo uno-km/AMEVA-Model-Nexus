@@ -50,7 +50,6 @@ AMEVA-Model-Nexus/models/
 scrcpy-win64-v3.3.4/
 *.dll
 *.exe
-*.bat
 *.lib
 *.pdb
 *.zip
