@@ -76,6 +76,18 @@ def check_and_install_dependencies():
     print("\n[3/3] Ensuring basic Nexus dependencies are installed (fastapi, uvicorn, aiohttp)...")
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "fastapi", "uvicorn", "aiohttp", "psutil"])
 
+import socket
+
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
 def start_services():
     print("\n🚀 Starting AMEVA Nexus Services...\n")
     processes = []
@@ -93,10 +105,25 @@ def start_services():
     p3 = subprocess.Popen([sys.executable, "src/model_router.py"])
     processes.append(("Model Router API (Port 14000)", p3))
     
+    local_ip = get_local_ip()
+    
     print("\n✅ All services are running!")
-    print("   - API Gateway : http://localhost:14000")
-    print("   - Dashboard   : http://localhost:14001")
-    print("   - Log Server  : http://localhost:14003")
+    print(f"   - API Gateway : http://{local_ip}:14000 (External) | http://localhost:14000 (Local)")
+    print(f"   - Dashboard   : http://{local_ip}:14001 (External) | http://localhost:14001 (Local)")
+    print(f"   - Log Server  : http://{local_ip}:14003 (External) | http://localhost:14003 (Local)")
+    
+    print("\n=========================================================================")
+    print(" 📖 [Quick API Usage Guide] - Copy & Paste to your team!")
+    print("=========================================================================")
+    print(f" [1] Check API Docs & Available Models:")
+    print(f"     curl http://{local_ip}:14000/help")
+    print("")
+    print(f" [2] Send a Chat Request (Streaming Mode):")
+    print(f"     curl -X POST http://{local_ip}:14000/api/chat \\")
+    print("          -H \"Content-Type: application/json\" \\")
+    print("          -d '{\"model\": \"llama3-8b\", \"prompt\": \"Hello!\", \"stream\": true}'")
+    print("=========================================================================\n")
+    
     print("🛑 Press [Ctrl+C] to stop everything cleanly.")
     
     try:
