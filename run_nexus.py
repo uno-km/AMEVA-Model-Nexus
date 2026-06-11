@@ -44,7 +44,12 @@ def check_and_install_dependencies():
             print("[3/3] Installing llama-cpp-python with CUDA support...")
             env = os.environ.copy()
             env["CMAKE_ARGS"] = "-DGGML_CUDA=on"
-            subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir"], env=env)
+            try:
+                subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir"], env=env, check=True)
+            except subprocess.CalledProcessError:
+                print("⚠️ Failed to compile CUDA version of llama-cpp-python. (Missing C++ Build Tools?)")
+                print("⚠️ Falling back to pre-built CPU version...")
+                subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"])
     else:
         # CPU Mode
         if not torch_installed:
