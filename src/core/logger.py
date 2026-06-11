@@ -4,6 +4,9 @@ import asyncio
 import json
 from datetime import datetime
 from typing import Any, Dict
+from contextlib import asynccontextmanager
+
+from src.core.database import DatabaseManager, get_connection
 
 from fastapi import FastAPI, Request
 

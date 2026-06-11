@@ -79,11 +79,11 @@ class DatabaseManager:
         conn.close()
 
     @staticmethod
-    def router_update_worker_heartbeat(worker_id: str):
+    def router_update_worker_heartbeat(worker_id: str, status: str = "ONLINE"):
         now_str = datetime.now().isoformat()
         conn = get_connection()
         cursor = conn.cursor()
-        cursor.execute("UPDATE router_workers SET last_heartbeat=?, status='ONLINE' WHERE worker_id=?", (now_str, worker_id))
+        cursor.execute("UPDATE router_workers SET last_heartbeat=?, status=? WHERE worker_id=?", (now_str, status, worker_id))
         conn.commit()
         conn.close()
 

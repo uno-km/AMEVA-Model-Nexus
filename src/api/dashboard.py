@@ -2,6 +2,8 @@ import sqlite3
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import uvicorn
+import datetime
+from src.core.database import get_connection
 
 app = FastAPI(title="AMEVA Ultra-Light Dashboard")
 DB_PATH = "ameva_universal_logs.db"

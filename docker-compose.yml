@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  worker_8b_gpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        WHEEL_URL: "https://abetlen.github.io/llama-cpp-python/whl/cu121"
+    environment:
+      - WORKER_NAME=Docker_8B_GPU
+      - SUPPORTED_MODELS=Llama-8
+      - NEXUS_URL=http://host.docker.internal:14000
+      - MODEL_PATH=/models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
+      - N_GPU_LAYERS=-1
+      - N_CTX=4096
+      - SPECS={"cpu":"Docker","vram":"GPU Passthrough","type":"Server"}
+    volumes:
+      - C:\ameva\models\llm:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+  worker_3b_cpu:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+      args:
+        WHEEL_URL: "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+    environment:
+      - WORKER_NAME=Docker_3B_CPU
+      - SUPPORTED_MODELS=qwen-3
+      - NEXUS_URL=http://host.docker.internal:14000
+      - MODEL_PATH=/models/qwen2.5-3b-instruct-q4_k_m.gguf
+      - N_GPU_LAYERS=0
+      - N_CTX=2048
+      - SPECS={"cpu":"Docker","vram":"None (CPU Only)","type":"Server"}
+    volumes:
+      - C:\ameva\models\llm:/models
+    restart: unless-stopped

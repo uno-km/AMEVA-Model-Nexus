@@ -93,16 +93,16 @@ def start_services():
     processes = []
     
     # 1. Log Server
-    p1 = subprocess.Popen([sys.executable, "src/log_server.py"])
+    p1 = subprocess.Popen([sys.executable, "-m", "src.core.logger"])
     processes.append(("Log Server (Port 14003)", p1))
     
     # 2. Web Dashboard
-    p2 = subprocess.Popen([sys.executable, "src/log_web_dashboard.py"])
+    p2 = subprocess.Popen([sys.executable, "-m", "src.api.dashboard"])
     processes.append(("Web Dashboard (Port 14001)", p2))
     
     # 3. Model Router (API Gateway)
     time.sleep(2)
-    p3 = subprocess.Popen([sys.executable, "src/model_router.py"])
+    p3 = subprocess.Popen([sys.executable, "-m", "src.api.router"])
     processes.append(("Model Router API (Port 14000)", p3))
     
     local_ip = get_local_ip()
@@ -121,7 +121,7 @@ def start_services():
     print(f" [2] Send a Chat Request (Streaming Mode):")
     print(f"     curl -X POST http://{local_ip}:14000/api/chat \\")
     print("          -H \"Content-Type: application/json\" \\")
-    print("          -d '{\"model\": \"llama3-8b\", \"prompt\": \"Hello!\", \"stream\": true}'")
+    print("          -d '{\"model\": \"Llama-8\", \"prompt\": \"Hello!\", \"stream\": true}'")
     print("=========================================================================\n")
     
     print("🛑 Press [Ctrl+C] to stop everything cleanly.")
