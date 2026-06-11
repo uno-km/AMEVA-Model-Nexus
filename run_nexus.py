@@ -11,13 +11,31 @@ def check_nvidia_gpu():
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
+def check_cuda_toolkit():
+    try:
+        # Check if nvcc (CUDA compiler) is available
+        subprocess.run(["nvcc", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return True
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        return False
+
 def check_and_install_dependencies():
     has_gpu = check_nvidia_gpu()
+    has_cuda = check_cuda_toolkit()
     
     print("=======================================")
     print(" 🚀 AMEVA Nexus Smart Launcher")
     print("=======================================")
-    print(f"[1/3] Hardware Scan: {'🟢 NVIDIA GPU Found' if has_gpu else '🟡 CPU Mode'}")
+    
+    if has_gpu and has_cuda:
+        print("[1/3] Hardware Scan: 🟢 NVIDIA GPU & CUDA Toolkit Found! (Full GPU Mode)")
+    elif has_gpu and not has_cuda:
+        print("[1/3] Hardware Scan: 🟡 NVIDIA GPU Found, BUT missing CUDA Toolkit!")
+        print("      ⚠️ GPU 가속을 온전히 사용하려면 NVIDIA CUDA Toolkit 설치가 필수입니다.")
+        print("      👉 다운로드 링크: https://developer.nvidia.com/cuda-downloads")
+        print("      (지금은 임시로 CPU 모드 또는 제한된 GPU 모드로 작동합니다.)")
+    else:
+        print("[1/3] Hardware Scan: ⚪ CPU Mode (No NVIDIA GPU detected)")
     
     # Check PyTorch installation
     try:
@@ -29,7 +47,7 @@ def check_and_install_dependencies():
         torch_cuda = False
 
     # Install / Update logic
-    if has_gpu:
+    if has_gpu and has_cuda:
         if not torch_installed or not torch_cuda:
             print("[2/3] Installing PyTorch with CUDA support...")
             subprocess.run([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu118"])
@@ -51,7 +69,7 @@ def check_and_install_dependencies():
                 print("⚠️ Falling back to pre-built CPU version...")
                 subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"])
     else:
-        # CPU Mode
+        # CPU Mode (or GPU without CUDA Toolkit)
         if not torch_installed:
             print("[2/3] Installing PyTorch (CPU)...")
             subprocess.run([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio"])
