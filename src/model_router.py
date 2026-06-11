@@ -2,79 +2,47 @@ import asyncio
 import uuid
 import time
 import json
-import sqlite3
+import logging
 from datetime import datetime
-from database import DatabaseManager, setup_db, get_connection
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import StreamingResponse, JSONResponse
+from pydantic import BaseModel
+import uvicorn
+import aiohttp
 
-class WorkerNode:
-    """
-    Represent a worker that can process LLM requests.
-    In a real system, this would make HTTP/Docker calls.
-    Here we simulate it using asyncio.sleep.
-    """
-    def __init__(self, worker_name: str, supported_models: list[str], specs: dict):
-        self.worker_id = str(uuid.uuid4())
-        self.worker_name = worker_name
-        self.supported_models = supported_models
-        self.specs = specs
-        self.specs_str = json.dumps(specs, ensure_ascii=False)
-        self.running_task_id = None
-        self.is_crashed = False  # Simulation flag
-        self.delay_multiplier = 1.0  # Simulation flag for bottleneck
+from database import DatabaseManager, setup_db
 
-    async def register(self):
-        DatabaseManager.router_upsert_worker(
-            worker_id=self.worker_id,
-            worker_name=self.worker_name,
-            supported_models=",".join(self.supported_models),
-            specs=self.specs_str,
-            status="ONLINE"
-        )
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("NexusRouter")
 
-    async def heartbeat_loop(self):
-        """Periodically update heartbeat in DB"""
-        while True:
-            if not self.is_crashed:
-                DatabaseManager.router_update_worker_heartbeat(self.worker_id)
-            await asyncio.sleep(5)
+# In-memory dictionary to hold asyncio queues for streaming tasks
+# Format: { task_id: asyncio.Queue() }
+STREAM_QUEUES = {}
 
-    async def process_task(self, task_id: str, prompt: str):
-        """Simulate processing a task"""
-        self.running_task_id = task_id
-        DatabaseManager.router_set_worker_status(self.worker_id, "BUSY")
-        
-        # Simulate processing time based on prompt length
-        process_time = (len(prompt) * 0.1) * self.delay_multiplier
-        
-        # Simulate work
-        elapsed = 0
-        while elapsed < process_time:
-            if self.is_crashed:
-                # If crashed during processing, we just stop reporting
-                return
-            await asyncio.sleep(1)
-            elapsed += 1
+# We will send logs to the Log Server (port 14003)
+LOG_SERVER_URL = "http://127.0.0.1:14003/log/push"
 
-        # Finished successfully
-        result = f"[{self.worker_name}] Answer for: '{prompt}'"
-        DatabaseManager.router_complete_task(task_id, result)
-        DatabaseManager.router_set_worker_status(self.worker_id, "ONLINE")
-        self.running_task_id = None
+async def push_log_to_server(source: str, level: str, payload_data: dict):
+    try:
+        async with aiohttp.ClientSession() as session:
+            log_payload = {
+                "source": source,
+                "level": level,
+                "payload": payload_data
+            }
+            async with session.post(LOG_SERVER_URL, json=log_payload, timeout=2) as resp:
+                await resp.read()
+    except Exception as e:
+        logger.error(f"Failed to push log: {e}")
 
-class ModelRouter:
-    """
-    Central router that assigns pending tasks to online workers
-    and monitors for bottlenecks and crashes.
-    """
-    def __init__(self, watchdog_interval=5.0, offline_timeout=15.0, task_timeout=30.0):
-        self.watchdog_interval = watchdog_interval
-        self.offline_timeout = offline_timeout
-        self.task_timeout = task_timeout  # Using 30s instead of 5m for simulation
+# --- Background Tasks ---
 
-    async def dispatcher_loop(self):
-        """Continuously assigns PENDING tasks to ONLINE workers"""
-        print("[Router] Dispatcher Loop Started")
-        while True:
+async def dispatcher_loop():
+    """Continuously assigns PENDING tasks to ONLINE workers"""
+    logger.info("[Dispatcher] Started")
+    while True:
+        try:
             pending_tasks = DatabaseManager.router_get_pending_tasks()
             if pending_tasks:
                 workers = DatabaseManager.router_get_workers()
@@ -84,69 +52,61 @@ class ModelRouter:
                     task_id = task['task_id']
                     req_model = task['model_name']
                     
-                    # Find a suitable worker
                     suitable_worker = next((w for w in online_workers if req_model in w['supported_models']), None)
-                    
                     if suitable_worker:
                         worker_id = suitable_worker['worker_id']
-                        print(f"[Router] Assigning Task {task_id[:8]} to Worker {suitable_worker['worker_name']}")
-                        
-                        # Assign in DB
                         DatabaseManager.router_assign_task(task_id, worker_id)
                         DatabaseManager.router_set_worker_status(worker_id, "BUSY")
-                        
-                        # In a real system, we would trigger an API call to the worker here.
-                        # Since we are simulating, we will let the global simulation loop trigger it,
-                        # or we just assume the worker pulls it. For this simulation, we emit an event.
-                        # We will use a simple global dictionary to find the worker instance and trigger it.
-                        worker_instance = GLOBAL_WORKERS.get(worker_id)
-                        if worker_instance:
-                            asyncio.create_task(worker_instance.process_task(task_id, task['prompt']))
-                        
-                        # Remove from online pool to prevent double assignment
                         online_workers.remove(suitable_worker)
+                        logger.info(f"[Dispatcher] Task {task_id[:8]} -> Worker {worker_id[:8]}")
+        except Exception as e:
+            logger.error(f"[Dispatcher] Error: {e}")
+        
+        await asyncio.sleep(1)
 
-            await asyncio.sleep(2)
+async def watchdog_loop():
+    """Monitors for crashed workers and bottlenecked tasks"""
+    logger.info("[Watchdog] Started")
+    offline_timeout = 15.0
+    task_timeout = 300.0  # 5 minutes for real LLM generation
 
-    async def watchdog_loop(self):
-        """Monitors for crashed workers and bottlenecked tasks"""
-        print("[Watchdog] Watchdog Loop Started")
-        while True:
+    while True:
+        try:
             now = datetime.now()
             
-            # 1. Check for Crashed Workers (Offline Timeout)
+            # 1. Offline Timeout
             workers = DatabaseManager.router_get_workers()
             for w in workers:
-                # Parse last_heartbeat
                 if w['last_heartbeat']:
                     last_hb = datetime.fromisoformat(w['last_heartbeat'])
                     diff_sec = (now - last_hb).total_seconds()
-                    if diff_sec > self.offline_timeout and w['status'] != 'OFFLINE':
-                        print(f"[Watchdog] [ALERT] Worker {w['worker_name']} timed out (no heartbeat for {diff_sec:.1f}s). Marking OFFLINE.")
+                    if diff_sec > offline_timeout and w['status'] != 'OFFLINE':
+                        logger.warning(f"[Watchdog] Worker {w['worker_name']} offline ({diff_sec:.1f}s)")
                         DatabaseManager.router_set_worker_status(w['worker_id'], 'OFFLINE')
 
-            # 2. Check for Bottlenecked / Crashed Tasks
+            # 2. Bottleneck Timeout & Crash Re-queue
             processing_tasks = DatabaseManager.router_get_processing_tasks()
             for task in processing_tasks:
                 started_at = datetime.fromisoformat(task['started_at'])
                 worker_id = task['assigned_worker_id']
                 diff_sec = (now - started_at).total_seconds()
                 
-                # Check if the assigned worker is now OFFLINE
                 assigned_worker = next((w for w in workers if w['worker_id'] == worker_id), None)
                 
+                # If assigned worker crashed
                 if assigned_worker and assigned_worker['status'] == 'OFFLINE':
-                    print(f"[Watchdog] [RE-QUEUE] Task {task['task_id'][:8]} was assigned to crashed worker {assigned_worker['worker_name']}. Re-queueing.")
+                    logger.warning(f"[Watchdog] Task {task['task_id'][:8]} assigned to OFFLINE worker. Re-queueing.")
                     DatabaseManager.router_requeue_task(task['task_id'])
+                    # Tell stream queue if it exists
+                    q = STREAM_QUEUES.get(task['task_id'])
+                    if q: await q.put("[WARN: Worker crashed, task re-queued. Please wait...]\n")
                     continue
-
-                # Check for Bottleneck (Timeout)
-                if diff_sec > self.task_timeout:
-                    print(f"[Watchdog] [BOTTLENECK] Task {task['task_id'][:8]} taking too long ({diff_sec:.1f}s). Cancelling & Logging.")
-                    
+                
+                # Bottleneck
+                if diff_sec > task_timeout:
+                    logger.error(f"[Watchdog] Task {task['task_id'][:8]} bottlenecked ({diff_sec:.1f}s). Cancelling.")
                     worker_specs = assigned_worker['specs'] if assigned_worker else "{}"
                     
-                    # 1. Log detailed info
                     DatabaseManager.router_log_bottleneck(
                         task_id=task['task_id'],
                         worker_id=worker_id,
@@ -155,92 +115,228 @@ class ModelRouter:
                         worker_specs=worker_specs,
                         processing_time_sec=diff_sec
                     )
-                    
-                    # 2. Mark as TIMEOUT (or we could re-queue, but let's cancel as requested)
                     DatabaseManager.router_fail_task(task['task_id'], new_status="TIMEOUT")
                     
-                    # Free up the worker just in case it's still alive but stuck
                     if assigned_worker and assigned_worker['status'] == 'BUSY':
                         DatabaseManager.router_set_worker_status(worker_id, "ONLINE")
+                        
+                    q = STREAM_QUEUES.get(task['task_id'])
+                    if q: await q.put("[ERROR: Task timed out]\n[DONE]")
 
-            await asyncio.sleep(self.watchdog_interval)
+        except Exception as e:
+            logger.error(f"[Watchdog] Error: {e}")
+            
+        await asyncio.sleep(5)
 
-# For simulation, we keep a global ref to worker objects
-GLOBAL_WORKERS = {}
 
-async def simulation_scenario():
-    # Setup DB
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     setup_db()
-    print("Database Initialized.")
     
-    # Clean up any previous state
-    conn = get_connection() # workaround to run raw sql
-    cursor = conn.cursor()
-    cursor.execute("DELETE FROM router_tasks")
-    cursor.execute("DELETE FROM router_workers")
-    cursor.execute("DELETE FROM router_bottleneck_logs")
-    conn.commit()
-    conn.close()
+    # Start background loops
+    task1 = asyncio.create_task(dispatcher_loop())
+    task2 = asyncio.create_task(watchdog_loop())
+    
+    yield
+    
+    task1.cancel()
+    task2.cancel()
 
-    router = ModelRouter(watchdog_interval=2.0, offline_timeout=10.0, task_timeout=15.0)
-    
-    # 1. Start Router Loops
-    asyncio.create_task(router.dispatcher_loop())
-    asyncio.create_task(router.watchdog_loop())
 
-    # 2. Create Workers
-    w1 = WorkerNode("PC_Docker_8B", ["llama3-8b"], {"cpu": "i7", "vram": "12GB", "type": "desktop"})
-    w2 = WorkerNode("Galaxy_S24", ["gemma-2b"], {"cpu": "Snapdragon 8 Gen 3", "ram": "12GB", "type": "mobile"})
-    w3 = WorkerNode("Slow_Old_Laptop", ["llama3-8b"], {"cpu": "i3", "vram": "4GB", "type": "laptop"})
+app = FastAPI(title="AMEVA Model Nexus Router", lifespan=lifespan)
 
-    for w in [w1, w2, w3]:
-        await w.register()
-        GLOBAL_WORKERS[w.worker_id] = w
-        asyncio.create_task(w.heartbeat_loop())
-    
-    print("\n--- [Scenario 1] Normal processing ---")
-    DatabaseManager.router_create_task("gemma-2b", "What is Python?")
-    DatabaseManager.router_create_task("llama3-8b", "Explain async.")
-    
-    await asyncio.sleep(5)
-    
-    print("\n--- [Scenario 2] Worker Crash & Re-queue ---")
-    print("PC_Docker_8B crashes suddenly...")
-    w1.is_crashed = True # Stop heartbeat and processing
-    
-    # Submit new task that needs 8B. It might get assigned to w1 if it hasn't timed out yet, 
-    # or to w3. Let's submit two to guarantee one gets stuck on w1 if it was free.
-    t3 = DatabaseManager.router_create_task("llama3-8b", "How to fix a bug?")
-    
-    await asyncio.sleep(15) # Wait for watchdog to notice crash and re-queue
-    
-    print("\n--- [Scenario 3] Bottleneck (Timeout) & Detailed Logging ---")
-    print("Slow_Old_Laptop starts a massive task but is too slow...")
-    w3.delay_multiplier = 100.0 # Make it super slow
-    t4 = DatabaseManager.router_create_task("llama3-8b", "Write a 50 page essay about the universe.")
-    
-    await asyncio.sleep(20) # Wait for watchdog to timeout the task
-    
-    print("\n--- Final Database Checks ---")
-    pending = DatabaseManager.router_get_pending_tasks()
-    print(f"Pending tasks remaining: {len(pending)}")
-    
-    conn = get_connection()
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM router_tasks WHERE task_id=?", (t4,))
-    t4_rec = cursor.fetchone()
-    print(f"Task 4 Status: {t4_rec['status']}")
-    
-    cursor.execute("SELECT * FROM router_bottleneck_logs")
-    logs = cursor.fetchall()
-    print(f"Bottleneck logs count: {len(logs)}")
-    if logs:
-        print("Latest Bottleneck Log:")
-        print(dict(logs[-1]))
-    conn.close()
+# --- Pydantic Models ---
 
-    print("Simulation Complete. Exiting.")
+class ChatRequest(BaseModel):
+    model: str
+    prompt: str
+    stream: bool = False
+
+class WorkerRegisterReq(BaseModel):
+    worker_name: str
+    supported_models: list[str]
+    specs: dict
+
+class WorkerHeartbeatReq(BaseModel):
+    worker_id: str
+
+class StreamChunkReq(BaseModel):
+    worker_id: str
+    task_id: str
+    chunk: str
+
+class CompleteTaskReq(BaseModel):
+    worker_id: str
+    task_id: str
+    result_content: str
+
+# --- User/Client API ---
+
+@app.get("/help")
+async def get_help():
+    """Returns documentation for the API."""
+    workers = DatabaseManager.router_get_workers()
+    online_workers = [w for w in workers if w['status'] == 'ONLINE']
+    
+    available_models = set()
+    for w in online_workers:
+        models = w['supported_models'].split(',')
+        for m in models:
+            if m.strip(): available_models.add(m.strip())
+            
+    help_info = {
+        "api_description": "AMEVA Model Nexus - Production API Gateway",
+        "endpoints": {
+            "POST /api/chat": "Submit a request to an LLM.",
+            "GET /help": "This documentation."
+        },
+        "chat_parameters": {
+            "model": "String. Required. Example: 'llama3-8b'",
+            "prompt": "String. Required. Your input text.",
+            "stream": "Boolean. Default: false. If true, returns Server-Sent Events (real-time typing)."
+        },
+        "available_models_currently_online": list(available_models),
+        "how_streaming_works": "When stream=true, you will receive text chunks as they are generated by the worker. The stream ends with the exact string '[DONE]'."
+    }
+    return JSONResponse(content=help_info)
+
+@app.post("/api/chat")
+async def api_chat(req: ChatRequest, request: Request):
+    client_ip = request.client.host
+    model = req.model
+    
+    # 1. Model Availability Check
+    workers = DatabaseManager.router_get_workers()
+    online_workers = [w for w in workers if w['status'] == 'ONLINE']
+    if not any(model in w['supported_models'] for w in online_workers):
+        raise HTTPException(status_code=500, detail=f"Model '{model}' is not supported by any currently online workers.")
+
+    # 2. Create Task
+    task_id = DatabaseManager.router_create_task(
+        model_name=model, 
+        prompt=req.prompt, 
+        client_ip=client_ip, 
+        stream_mode=req.stream
+    )
+    
+    logger.info(f"[API] Task {task_id[:8]} created by {client_ip} for {model}")
+
+    # 3. Handle Streaming
+    if req.stream:
+        STREAM_QUEUES[task_id] = asyncio.Queue()
+        
+        async def event_generator():
+            full_content = ""
+            queue = STREAM_QUEUES[task_id]
+            try:
+                while True:
+                    chunk = await queue.get()
+                    if chunk == "[DONE]":
+                        break
+                    
+                    # Also append to a local string buffer so we can log it at the end
+                    if not chunk.startswith("[WARN:") and not chunk.startswith("[ERROR:"):
+                        full_content += chunk
+                        
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+                    
+            except asyncio.CancelledError:
+                logger.warning(f"Client disconnected stream for task {task_id[:8]}")
+            finally:
+                # When stream is done or client disconnects, send full log to central DB
+                await push_log_to_server(
+                    source="NexusAPI",
+                    level="INFO",
+                    payload_data={
+                        "event": "Stream_Finished",
+                        "task_id": task_id,
+                        "client_ip": client_ip,
+                        "model": model,
+                        "prompt_preview": req.prompt[:100],
+                        "final_result": full_content
+                    }
+                )
+                if task_id in STREAM_QUEUES:
+                    del STREAM_QUEUES[task_id]
+                    
+        return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+    # 4. Handle Static Mode (Wait for complete)
+    else:
+        while True:
+            task = DatabaseManager.router_get_task(task_id)
+            if task and task['status'] == 'COMPLETED':
+                result = task['result_content']
+                # Log to central DB
+                await push_log_to_server(
+                    source="NexusAPI",
+                    level="INFO",
+                    payload_data={
+                        "event": "Static_Finished",
+                        "task_id": task_id,
+                        "client_ip": client_ip,
+                        "model": model,
+                        "prompt_preview": req.prompt[:100],
+                        "final_result": result
+                    }
+                )
+                return {"task_id": task_id, "result": result}
+            elif task and task['status'] in ['FAILED', 'TIMEOUT']:
+                raise HTTPException(status_code=500, detail=f"Task failed or timed out: {task['status']}")
+            
+            await asyncio.sleep(0.5)
+
+# --- Worker API ---
+
+@app.post("/worker/register")
+async def worker_register(req: WorkerRegisterReq):
+    worker_id = str(uuid.uuid4())
+    DatabaseManager.router_upsert_worker(
+        worker_id=worker_id,
+        worker_name=req.worker_name,
+        supported_models=",".join(req.supported_models),
+        specs=json.dumps(req.specs)
+    )
+    return {"worker_id": worker_id}
+
+@app.post("/worker/heartbeat")
+async def worker_heartbeat(req: WorkerHeartbeatReq):
+    DatabaseManager.router_update_worker_heartbeat(req.worker_id)
+    return {"status": "ok"}
+
+@app.get("/worker/poll_task")
+async def worker_poll(worker_id: str):
+    # Find if any task is ASSIGNED to this worker (status = PROCESSING)
+    tasks = DatabaseManager.router_get_processing_tasks()
+    my_tasks = [t for t in tasks if t['assigned_worker_id'] == worker_id]
+    
+    if my_tasks:
+        # Worker might have crashed and restarted, give it the task it's supposed to do
+        t = my_tasks[0]
+        # Return task info
+        return {"has_task": True, "task_id": t['task_id'], "prompt": t['prompt'], "model": t['model_name'], "stream_mode": t['stream_mode']}
+    
+    return {"has_task": False}
+
+@app.post("/worker/stream_chunk")
+async def worker_stream_chunk(req: StreamChunkReq):
+    # Route chunk to the appropriate streaming queue
+    q = STREAM_QUEUES.get(req.task_id)
+    if q:
+        await q.put(req.chunk)
+    return {"status": "ok"}
+
+@app.post("/worker/complete_task")
+async def worker_complete(req: CompleteTaskReq):
+    DatabaseManager.router_complete_task(req.task_id, req.result_content)
+    DatabaseManager.router_set_worker_status(req.worker_id, "ONLINE")
+    
+    # Send [DONE] signal to stream if applicable
+    q = STREAM_QUEUES.get(req.task_id)
+    if q:
+        await q.put("[DONE]")
+        
+    return {"status": "ok"}
 
 if __name__ == "__main__":
-    asyncio.run(simulation_scenario())
+    uvicorn.run(app, host="0.0.0.0", port=14000)

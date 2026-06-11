@@ -33,6 +33,8 @@ def setup_db():
             status TEXT,
             assigned_worker_id TEXT,
             result_content TEXT,
+            client_ip TEXT,
+            stream_mode BOOLEAN,
             created_at TEXT,
             started_at TEXT,
             updated_at TEXT
@@ -104,18 +106,28 @@ class DatabaseManager:
         return [dict(r) for r in rows]
 
     @staticmethod
-    def router_create_task(model_name: str, prompt: str) -> str:
+    def router_create_task(model_name: str, prompt: str, client_ip: str = "0.0.0.0", stream_mode: bool = False) -> str:
         task_id = str(uuid.uuid4())
         now_str = datetime.now().isoformat()
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO router_tasks (task_id, model_name, prompt, status, created_at, updated_at)
-            VALUES (?, ?, ?, 'PENDING', ?, ?)
-        ''', (task_id, model_name, prompt, now_str, now_str))
+            INSERT INTO router_tasks (task_id, model_name, prompt, status, client_ip, stream_mode, created_at, updated_at)
+            VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?)
+        ''', (task_id, model_name, prompt, client_ip, stream_mode, now_str, now_str))
         conn.commit()
         conn.close()
         return task_id
+
+    @staticmethod
+    def router_get_task(task_id: str) -> dict:
+        conn = get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM router_tasks WHERE task_id = ?", (task_id,))
+        row = cursor.fetchone()
+        conn.close()
+        return dict(row) if row else None
 
     @staticmethod
     def router_get_pending_tasks() -> list:

@@ -5,86 +5,75 @@ import time
 
 def check_nvidia_gpu():
     try:
-        # Check if nvidia-smi exists and executes correctly
         subprocess.run(["nvidia-smi"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         return True
     except (FileNotFoundError, subprocess.CalledProcessError):
         return False
 
-def check_cuda_toolkit():
-    try:
-        # Check if nvcc (CUDA compiler) is available
-        subprocess.run(["nvcc", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+def check_cuda_env():
+    # Check if CUDA_PATH is set (Official Windows standard for CUDA Toolkit)
+    cuda_path = os.environ.get("CUDA_PATH")
+    if cuda_path and os.path.exists(cuda_path):
         return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
+    return False
+
+def get_llama_engine_status():
+    try:
+        from llama_cpp import llama_supports_gpu_offload
+        return "GPU" if llama_supports_gpu_offload() else "CPU"
+    except Exception as e:
+        err_str = str(e).lower()
+        if "llama.dll" in err_str or "cudart" in err_str:
+            return "GPU_MISSING_CUDA"
+        return "NONE"
 
 def check_and_install_dependencies():
-    has_gpu = check_nvidia_gpu()
-    has_cuda = check_cuda_toolkit()
-    
     print("=======================================")
     print(" 🚀 AMEVA Nexus Smart Launcher")
     print("=======================================")
     
-    if has_gpu and has_cuda:
-        print("[1/3] Hardware Scan: 🟢 NVIDIA GPU & CUDA Toolkit Found! (Full GPU Mode)")
-    elif has_gpu and not has_cuda:
-        print("[1/3] Hardware Scan: 🟡 NVIDIA GPU Found, BUT missing CUDA Toolkit!")
-        print("      ⚠️ GPU 가속을 온전히 사용하려면 NVIDIA CUDA Toolkit 설치가 필수입니다.")
-        print("      👉 다운로드 링크: https://developer.nvidia.com/cuda-downloads")
-        print("      (지금은 임시로 CPU 모드 또는 제한된 GPU 모드로 작동합니다.)")
+    has_gpu = check_nvidia_gpu()
+    has_cuda = check_cuda_env()
+
+    if has_gpu:
+        if has_cuda:
+            print("[1/3] Hardware Scan: 🟢 NVIDIA GPU & CUDA_PATH Found! (Target: GPU Mode)")
+        else:
+            print("[1/3] Hardware Scan: 🟡 NVIDIA GPU Found, BUT missing CUDA Toolkit (CUDA_PATH)!")
+            print("      ⚠️ GPU 가속을 온전히 사용하려면 NVIDIA CUDA Toolkit 설치가 필수입니다.")
+            print("      👉 다운로드 링크: https://developer.nvidia.com/cuda-downloads")
+            print("      => Reverting to CPU mode to prevent crashes.")
+            has_gpu = False
     else:
         print("[1/3] Hardware Scan: ⚪ CPU Mode (No NVIDIA GPU detected)")
-    
-    # Check PyTorch installation
-    try:
-        import torch
-        torch_installed = True
-        torch_cuda = torch.cuda.is_available()
-    except ImportError:
-        torch_installed = False
-        torch_cuda = False
 
-    # Install / Update logic
-    if has_gpu and has_cuda:
-        if not torch_installed or not torch_cuda:
-            print("[2/3] Installing PyTorch with CUDA support...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio", "--index-url", "https://download.pytorch.org/whl/cu118"])
+    print("[2/3] Checking LLM Engine (llama-cpp-python) Status...")
+    engine_status = get_llama_engine_status()
+    
+    # Pre-built wheel index URLs
+    cu121_index = "https://abetlen.github.io/llama-cpp-python/whl/cu121"
+    cpu_index = "https://abetlen.github.io/llama-cpp-python/whl/cpu"
+    
+    if has_gpu and engine_status == "CPU":
+        print("=> NVIDIA GPU detected, but CPU engine is installed. Fixing...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--extra-index-url", cu121_index, "--force-reinstall", "--no-cache-dir", "--only-binary=llama-cpp-python"])
+    elif has_gpu and engine_status == "GPU_MISSING_CUDA":
+        print("=> [WARNING] NVIDIA GPU detected, but CUDA 12 Toolkit runtime is missing! Reverting to CPU engine to prevent crash.")
+        subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--extra-index-url", cpu_index, "--force-reinstall", "--no-cache-dir", "--only-binary=llama-cpp-python"])
+    elif not has_gpu and engine_status in ["GPU", "GPU_MISSING_CUDA"]:
+        print("=> No NVIDIA GPU detected (or no CUDA Toolkit), but GPU engine is installed. Fixing...")
+        subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--extra-index-url", cpu_index, "--force-reinstall", "--no-cache-dir", "--only-binary=llama-cpp-python"])
+    elif engine_status == "NONE":
+        if has_gpu:
+            print("=> Engine not found. Installing GPU engine (Pre-built cu121 wheel)...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--extra-index-url", cu121_index, "--only-binary=llama-cpp-python"])
         else:
-            print("[2/3] PyTorch (CUDA) is already installed.")
-            
-        # Check llama-cpp-python
-        try:
-            import llama_cpp
-            print("[3/3] llama-cpp-python is already installed. (Assuming CUDA build)")
-        except ImportError:
-            print("[3/3] Installing llama-cpp-python with CUDA support...")
-            env = os.environ.copy()
-            env["CMAKE_ARGS"] = "-DGGML_CUDA=on"
-            try:
-                subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--upgrade", "--force-reinstall", "--no-cache-dir"], env=env, check=True)
-            except subprocess.CalledProcessError:
-                print("⚠️ Failed to compile CUDA version of llama-cpp-python. (Missing C++ Build Tools?)")
-                print("⚠️ Falling back to pre-built CPU version...")
-                subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"])
+            print("=> Engine not found. Installing CPU engine (Pre-built wheel)...")
+            subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python", "--extra-index-url", cpu_index, "--only-binary=llama-cpp-python"])
     else:
-        # CPU Mode (or GPU without CUDA Toolkit)
-        if not torch_installed:
-            print("[2/3] Installing PyTorch (CPU)...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "torch", "torchvision", "torchaudio"])
-        else:
-            print("[2/3] PyTorch (CPU) is already installed.")
-            
-        try:
-            import llama_cpp
-            print("[3/3] llama-cpp-python is already installed.")
-        except ImportError:
-            print("[3/3] Installing llama-cpp-python (CPU)...")
-            subprocess.run([sys.executable, "-m", "pip", "install", "llama-cpp-python"])
-            
-    # Ensure basic dependencies for the Nexus system
-    print("\n[+] Ensuring basic dependencies are installed (fastapi, uvicorn, aiohttp)...")
+        print("=> Hardware and Engine configuration matches perfectly. 🟢")
+
+    print("\n[3/3] Ensuring basic Nexus dependencies are installed (fastapi, uvicorn, aiohttp)...")
     subprocess.run([sys.executable, "-m", "pip", "install", "-q", "fastapi", "uvicorn", "aiohttp", "psutil"])
 
 def start_services():
@@ -93,18 +82,21 @@ def start_services():
     
     # 1. Log Server
     p1 = subprocess.Popen([sys.executable, "src/log_server.py"])
-    processes.append(("Log Server (Port 9999)", p1))
+    processes.append(("Log Server (Port 14003)", p1))
     
     # 2. Web Dashboard
     p2 = subprocess.Popen([sys.executable, "src/log_web_dashboard.py"])
-    processes.append(("Web Dashboard (Port 14000)", p2))
+    processes.append(("Web Dashboard (Port 14001)", p2))
     
-    # 3. Model Router (Simulation)
-    time.sleep(2) # Give servers a moment to start
+    # 3. Model Router (API Gateway)
+    time.sleep(2)
     p3 = subprocess.Popen([sys.executable, "src/model_router.py"])
-    processes.append(("Model Router (Watchdog & Dispatcher)", p3))
+    processes.append(("Model Router API (Port 14000)", p3))
     
-    print("\n✅ All services are running! Web UI available at: http://localhost:14000")
+    print("\n✅ All services are running!")
+    print("   - API Gateway : http://localhost:14000")
+    print("   - Dashboard   : http://localhost:14001")
+    print("   - Log Server  : http://localhost:14003")
     print("🛑 Press [Ctrl+C] to stop everything cleanly.")
     
     try:
