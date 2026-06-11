@@ -12,6 +12,7 @@ NEXUS_URL = os.environ.get("NEXUS_URL", "http://127.0.0.1:14000")
 MODEL_PATH = os.environ.get("MODEL_PATH", "/models/test.gguf")
 N_GPU_LAYERS = int(os.environ.get("N_GPU_LAYERS", "0"))
 N_CTX = int(os.environ.get("N_CTX", "2048"))
+TEMPERATURE = float(os.environ.get("TEMPERATURE", "0.7"))
 SPECS_JSON = os.environ.get("SPECS", '{"type": "generic"}')
 
 # Global variables
@@ -112,6 +113,7 @@ def poll_and_process():
                     response = llm(
                         prompt,
                         max_tokens=512,
+                        temperature=TEMPERATURE,
                         stream=is_stream
                     )
                     

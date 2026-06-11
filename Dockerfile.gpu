@@ -1,0 +1,20 @@
+FROM nvidia/cuda:12.1.1-runtime-ubuntu22.04
+
+# Prevent timezone prompts during apt-get
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 python3-pip python-is-python3 \
+    curl libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fix for pip warning "Running pip as root"
+ENV PIP_ROOT_USER_ACTION=ignore
+
+RUN pip install --no-cache-dir requests
+RUN pip install --no-cache-dir llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121 --only-binary=llama-cpp-python
+
+COPY src /app/src
+WORKDIR /app
+
+CMD ["python3", "-m", "src.nodes.worker"]

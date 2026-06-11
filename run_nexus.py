@@ -90,6 +90,16 @@ def get_local_ip():
 
 def start_services():
     print("\n🚀 Starting AMEVA Nexus Services...\n")
+    
+    print("[Docker] Checking and starting Worker Cluster...")
+    try:
+        # Start docker-compose without blocking, hiding its noisy output
+        subprocess.run(["docker-compose", "up", "-d"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        print("   ✅ Docker Worker Cluster : ONLINE (V)\n")
+    except Exception as e:
+        print(f"   ❌ Docker Worker Cluster : OFFLINE (X) - Failed to start automatically.")
+        print("   => You may need to run `docker-compose up -d` manually if Docker is not running.\n")
+
     processes = []
     
     # 1. Log Server
