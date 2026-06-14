@@ -168,7 +168,7 @@ AMEVA-Model-Nexus/
 |-------|--------|-----------|---------------|-------------------|------|
 | **Phase 1** | 단일 노드 테스트 | Llama-3-8B | CPU/GPU Fallback | Response Time < 1000ms | 완료 |
 | **Phase 2** | 무중단 핫스왑 | Llama-8 -> Qwen-7 | 큐 버퍼링 대기열 | Connection Drop Rate = 0% | 완료 |
-| **Phase 3** | 멀티 워커 분산 | Qwen-3, Llama-8 | Round-Robin 분산 | $\max(\text{Throughput})$ | 진행 중 |
+| **Phase 3** | 멀티 워커 분산 | Qwen-3, Llama-8 | Round-Robin 분산 | max({Throughput}) | 진행 중 |
 
 ---
 
