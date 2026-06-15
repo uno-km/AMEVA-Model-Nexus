@@ -4,7 +4,7 @@
       "device": "A35",
       "model_filename": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
       "model_dir": "/data/data/com.termux/files/home/AI_Models",
-      "port": 14001,
+      "port": 10002,
       "ctx_size": 1024,
       "threads": 4,
       "ram_limit": 85.0
@@ -13,7 +13,7 @@
       "device": "S20",
       "model_filename": "qwen2.5-3b-instruct-q4_k_m.gguf",
       "model_dir": "/data/data/com.termux/files/home/AI_Models",
-      "port": 14002,
+      "port": 10003,
       "ctx_size": 1024,
       "threads": 4,
       "ram_limit": 85.0
@@ -22,7 +22,7 @@
       "device": "PC",
       "model_filename": "qwen2.5-3b-instruct-q4_k_m.gguf",
       "model_dir": "C:/ameva/models/llm",
-      "port": 14000,
+      "port": 10001,
       "ctx_size": 4096,
       "threads": 8,
       "ram_limit": 93.0

@@ -8,7 +8,7 @@ services:
     environment:
       - WORKER_NAME=Docker_8B_GPU
       - SUPPORTED_MODELS=Llama-8
-      - NEXUS_URL=http://host.docker.internal:14000
+      - NEXUS_URL=http://host.docker.internal:10001
       - MODEL_PATH=/models/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf
       - N_GPU_LAYERS=-1
       - N_CTX=4096
@@ -34,7 +34,7 @@ services:
     environment:
       - WORKER_NAME=Docker_3B_CPU
       - SUPPORTED_MODELS=qwen-3
-      - NEXUS_URL=http://host.docker.internal:14000
+      - NEXUS_URL=http://host.docker.internal:10001
       - MODEL_PATH=/models/qwen2.5-3b-instruct-q4_k_m.gguf
       - N_GPU_LAYERS=0
       - N_CTX=2048

@@ -25,8 +25,8 @@ STREAM_QUEUES = {}
 # Format: { worker_id: {"action": "hotswap", ...} }
 PENDING_COMMANDS = {}
 
-# We will send logs to the Log Server (port 14003)
-LOG_SERVER_URL = "http://127.0.0.1:14003/log/push"
+# We will send logs to the Log Server (port 10003)
+LOG_SERVER_URL = "http://127.0.0.1:10003/log/push"
 
 async def push_log_to_server(source: str, level: str, payload_data: dict):
     try:
@@ -388,4 +388,4 @@ async def worker_complete(req: CompleteTaskReq):
     return {"status": "ok"}
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=14000)
+    uvicorn.run(app, host="0.0.0.0", port=10001)

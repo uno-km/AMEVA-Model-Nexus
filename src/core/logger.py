@@ -100,4 +100,4 @@ async def push_log(req: Request):
 if __name__ == "__main__":
     import uvicorn
     # Start the server on port 14003
-    uvicorn.run(app, host="0.0.0.0", port=14003)
+    uvicorn.run(app, host="0.0.0.0", port=10003)

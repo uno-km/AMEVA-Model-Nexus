@@ -4,7 +4,7 @@ import time
 import uuid
 import sys
 
-URL = "http://127.0.0.1:14003/log/push"
+URL = "http://127.0.0.1:10003/log/push"
 
 # The goal is "10억건 느낌" (Feeling of 1 billion).
 # We'll bombard with 500 concurrent connections, each sending 1000 logs.

@@ -94,7 +94,7 @@ def start_services():
     print("[Docker] Checking and starting Worker Cluster...")
     try:
         # Start docker-compose without blocking, hiding its noisy output
-        subprocess.run(["docker-compose", "up", "-d"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(["docker-compose", "up", "-d"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
         print("   ✅ Docker Worker Cluster : ONLINE (V)\n")
     except Exception as e:
         print(f"   ❌ Docker Worker Cluster : OFFLINE (X) - Failed to start automatically.")
@@ -104,32 +104,32 @@ def start_services():
     
     # 1. Log Server
     p1 = subprocess.Popen([sys.executable, "-m", "src.core.logger"])
-    processes.append(("Log Server (Port 14003)", p1))
+    processes.append(("Log Server (Port 10003)", p1))
     
     # 2. Web Dashboard
     p2 = subprocess.Popen([sys.executable, "-m", "src.api.dashboard"])
-    processes.append(("Web Dashboard (Port 14001)", p2))
+    processes.append(("Web Dashboard (Port 10002)", p2))
     
     # 3. Model Router (API Gateway)
     time.sleep(2)
     p3 = subprocess.Popen([sys.executable, "-m", "src.api.router"])
-    processes.append(("Model Router API (Port 14000)", p3))
+    processes.append(("Model Router API (Port 10001)", p3))
     
     local_ip = get_local_ip()
     
     print("\n✅ All services are running!")
-    print(f"   - API Gateway : http://{local_ip}:14000 (External) | http://localhost:14000 (Local)")
-    print(f"   - Dashboard   : http://{local_ip}:14001 (External) | http://localhost:14001 (Local)")
-    print(f"   - Log Server  : http://{local_ip}:14003 (External) | http://localhost:14003 (Local)")
+    print(f"   - API Gateway : http://{local_ip}:10001 (External) | http://localhost:10001 (Local)")
+    print(f"   - Dashboard   : http://{local_ip}:10002 (External) | http://localhost:10002 (Local)")
+    print(f"   - Log Server  : http://{local_ip}:10003 (External) | http://localhost:10003 (Local)")
     
     print("\n=========================================================================")
     print(" 📖 [Quick API Usage Guide] - Copy & Paste to your team!")
     print("=========================================================================")
     print(f" [1] Check API Docs & Available Models:")
-    print(f"     curl http://{local_ip}:14000/help")
+    print(f"     curl http://{local_ip}:10001/help")
     print("")
     print(f" [2] Send a Chat Request (Streaming Mode):")
-    print(f"     curl -X POST http://{local_ip}:14000/api/chat \\")
+    print(f"     curl -X POST http://{local_ip}:10001/api/chat \\")
     print("          -H \"Content-Type: application/json\" \\")
     print("          -d '{\"model\": \"Llama-8\", \"prompt\": \"Hello!\", \"stream\": true}'")
     print("=========================================================================\n")
