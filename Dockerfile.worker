@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
+ENV PYTHONUNBUFFERED=1
 ARG WHEEL_URL="https://abetlen.github.io/llama-cpp-python/whl/cpu"
 
 RUN pip install --no-cache-dir requests
