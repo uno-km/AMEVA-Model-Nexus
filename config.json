@@ -21,7 +21,7 @@
     "EXPERT_PC": {
       "device": "PC",
       "model_filename": "qwen2.5-3b-instruct-q4_k_m.gguf",
-      "model_dir": "C:/ameva/models/llm",
+      "model_dir": "D:/ameva/models/llm",
       "port": 10001,
       "ctx_size": 4096,
       "threads": 8,
